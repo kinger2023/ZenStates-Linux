@@ -6,7 +6,7 @@ import argparse
 import cpuid
 
 APP_NAME = 'ZenStates for Linux'
-APP_VERSION = '1.3'
+APP_VERSION = '1.4'
 
 FID_MAX = 0xFF
 FID_MIN = 0x10
@@ -27,6 +27,7 @@ SMU_CMD_OC_ENABLE =         0
 SMU_CMD_OC_DISABLE =        0
 SMU_CMD_OC_FREQ_ALL_CORES = 0
 SMU_CMD_OC_VID =            0
+SMU_CMD_GET_PBO_SCALAR =    0
 
 isOcFreqSupported = False
 cpu_sockets = int(os.popen('cat /proc/cpuinfo | grep "physical id" | sort -u | wc -l').read())
@@ -326,7 +327,8 @@ elif _cpuid == 0x00800F82:
         SMU_CMD_GET_PBO_SCALAR = 0x6F
 
 # Zen 2 | Matisse, Rome, Castle Peak
-elif _cpuid in [0x00870F10, 0x00870F00, 0x00830F00, 0x00830F10]:
+# Zen 3 | Vermeer
+elif _cpuid in [0x00870F10, 0x00870F00, 0x00830F00, 0x00830F10, 0x00A20F00, 0x00A20F10]:
     SMU_CMD_ADDR = 0x03B10524
     SMU_RSP_ADDR = 0x03B10570
     SMU_ARG_ADDR = 0x03B10A40
