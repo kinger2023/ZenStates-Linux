@@ -4,9 +4,10 @@ import os
 import glob
 import argparse
 import cpuid
+import ctypes
 
 APP_NAME = 'ZenStates for Linux'
-APP_VERSION = '1.4'
+APP_VERSION = 1.5
 
 FID_MAX = 0xFF
 FID_MIN = 0x10
@@ -177,14 +178,22 @@ def voltsToVid(volts):
     return (1.55 - volts) / 0.00625
 
 
+def getCpuidRegs(fn):
+    if args.libcpuid:
+        regs = (ctypes.c_uint32 * 4)(fn, 0, 0, 0)
+        cpuid(regs)
+    else:
+        regs = cpuid.CPUID()(fn)
+    return regs
+
 def getCpuid():
-    eax, ebx, ecx, edx = cpuid.CPUID()(0x00000001)
+    eax, ebx, ecx, edx = getCpuidRegs(0x00000001)
     print("CPUID: %08X" % eax)
     return eax
 
 
 def getPkgType():
-    eax, ebx, ecx, edx = cpuid.CPUID()(0x80000001)
+    eax, ebx, ecx, edx = getCpuidRegs(0x80000001)
     type = ebx >> 28
     print("Package Type: %01d" % type)
     return type
@@ -280,6 +289,47 @@ def setPstateGui(index, fid, did, vid):
         print('GUI: Set Pstate%s: %s' % (index, getPstateDetails(new)))
         writemsr(PSTATES[index], new)
 
+parser = argparse.ArgumentParser(description='Dynamically edit AMD Ryzen processor parameters')
+parser.add_argument('-l', '--list', action='store_true', help='List all P-States')
+parser.add_argument('--no-gui', action='store_true', help='Run in CLI without GUI')
+parser.add_argument('--libcpuid', action='store_true', help='Use libcpuid instead of cpuid.py')
+parser.add_argument('-p', '--pstate', default=-1, type=int, choices=range(8), help='P-State to set')
+parser.add_argument('--enable', action='store_true', help='Enable P-State')
+parser.add_argument('--disable', action='store_true', help='Disable P-State')
+parser.add_argument('-f', '--fid', default=-1, type=hex, help='FID to set (in hex)')
+parser.add_argument('-d', '--did', default=-1, type=hex, help='DID to set (in hex)')
+parser.add_argument('-v', '--vid', default=-1, type=hex, help='VID to set (in hex)')
+parser.add_argument('--c6-enable', action='store_true', help='Enable C-State C6')
+parser.add_argument('--c6-disable', action='store_true', help='Disable C-State C6')
+parser.add_argument('--smu-test-message', action='store_true', help='Send test message to the SMU (response 1 means "success")')
+parser.add_argument('--oc-enable', action='store_true', help='Enable OC')
+parser.add_argument('--oc-disable', action='store_true', help='Disable OC')
+parser.add_argument('--oc-frequency', default=550, type=int, help='Set overclock frequency (in MHz)')
+parser.add_argument('--oc-vid', default=-1, type=hex, help='Set overclock VID')
+parser.add_argument('--ppt', default=-1, type=int, help='Set PPT limit (in W)')
+parser.add_argument('--tdc', default=-1, type=int, help='Set TDC limit (in A)')
+parser.add_argument('--edc', default=-1, type=int, help='Set EDC limit (in A)')
+
+args = parser.parse_args()
+
+if (not args.list
+    and args.pstate == -1
+    and not args.c6_enable
+    and not args.c6_disable
+    and not args.smu_test_message
+    and not args.oc_disable
+    and not args.oc_enable
+    and args.no_gui
+    and args.edc == -1
+    and args.ppt == -1
+    and args.tdc == -1):
+        parser.print_help()
+        exit()
+
+if args.libcpuid:
+    cpuid = ctypes.CDLL("libcpuid.so").cpu_exec_cpuid_ext
+    cpuid.restype = None
+    cpuid.argtypes = [ctypes.POINTER(ctypes.c_uint32)]
 
 print('CPUs: %d' % cpu_sockets)
 
@@ -374,28 +424,6 @@ elif _cpuid in [0x00860F01]:
 else:
     exit('CPU not supported!')
 
-parser = argparse.ArgumentParser(description='Dynamically edit AMD Ryzen processor parameters')
-parser.add_argument('-l', '--list', action='store_true', help='List all P-States')
-parser.add_argument('--no-gui', action='store_true', help='Run in CLI without GUI')
-parser.add_argument('-p', '--pstate', default=-1, type=int, choices=range(8), help='P-State to set')
-parser.add_argument('--enable', action='store_true', help='Enable P-State')
-parser.add_argument('--disable', action='store_true', help='Disable P-State')
-parser.add_argument('-f', '--fid', default=-1, type=hex, help='FID to set (in hex)')
-parser.add_argument('-d', '--did', default=-1, type=hex, help='DID to set (in hex)')
-parser.add_argument('-v', '--vid', default=-1, type=hex, help='VID to set (in hex)')
-parser.add_argument('--c6-enable', action='store_true', help='Enable C-State C6')
-parser.add_argument('--c6-disable', action='store_true', help='Disable C-State C6')
-parser.add_argument('--smu-test-message', action='store_true', help='Send test message to the SMU (response 1 means "success")')
-parser.add_argument('--oc-enable', action='store_true', help='Enable OC')
-parser.add_argument('--oc-disable', action='store_true', help='Disable OC')
-parser.add_argument('--oc-frequency', default=550, type=int, help='Set overclock frequency (in MHz)')
-parser.add_argument('--oc-vid', default=-1, type=hex, help='Set overclock VID')
-parser.add_argument('--ppt', default=-1, type=int, help='Set PPT limit (in W)')
-parser.add_argument('--tdc', default=-1, type=int, help='Set TDC limit (in A)')
-parser.add_argument('--edc', default=-1, type=int, help='Set EDC limit (in A)')
-
-args = parser.parse_args()
-
 if args.list:
     for p in range(len(PSTATES)):
         print('P' + str(p) + " - " + pstate2str(readmsr(PSTATES[p])))
@@ -476,11 +504,6 @@ if args.tdc > -1:
 if args.edc > -1:
     setEDC(args.edc)
     print('Set EDC to %sA' % args.edc)
-
-if (not args.list and args.pstate == -1 and not args.c6_enable and not args.c6_disable
-    and not args.smu_test_message and args.no_gui and args.edc == -1 and args.ppt == -1 
-    and args.tdc == -1):
-    parser.print_help()
 
 
 ###############################
