@@ -386,6 +386,8 @@ parser.add_argument('-v', '--vid', default=-1, type=hex, help='VID to set (in he
 parser.add_argument('--c6-enable', action='store_true', help='Enable C-State C6')
 parser.add_argument('--c6-disable', action='store_true', help='Disable C-State C6')
 parser.add_argument('--smu-test-message', action='store_true', help='Send test message to the SMU (response 1 means "success")')
+parser.add_argument('--oc-enable', action='store_true', help='Enable OC')
+parser.add_argument('--oc-disable', action='store_true', help='Disable OC')
 parser.add_argument('--oc-frequency', default=550, type=int, help='Set overclock frequency (in MHz)')
 parser.add_argument('--oc-vid', default=-1, type=hex, help='Set overclock VID')
 parser.add_argument('--ppt', default=-1, type=int, help='Set PPT limit (in W)')
@@ -440,6 +442,20 @@ if args.c6_disable:
 if args.smu_test_message:
     print('Sending test SMU message')
     print('SMU response: %X' % writesmu(0x1))
+
+if args.oc_enable:
+    if isOcFreqSupported:
+        writesmu(SMU_CMD_OC_ENABLE)
+        print('Enable OC Mode')
+    else:
+        print('OC Mode not supported')
+
+if args.oc_disable:
+    if isOcFreqSupported:
+        writesmu(SMU_CMD_OC_DISABLE)
+        print('Disabling OC Mode')
+    else:
+        print('OC Mode not supported')
 
 if args.oc_vid >= 0:
     writesmu(SMU_CMD_OC_VID, args.oc_vid)
